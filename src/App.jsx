@@ -1,39 +1,69 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import Login from './Login'; // Pastikan path-nya benar
 
 function App() {
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(false);
+  // Mengambil nilai awal token dari LocalStorage
+  const [token, setToken] = useState(localStorage.getItem('token'));
 
+  // Fungsi ambil data
   const fetchProducts = async () => {
+    if (!token) return;
+    setLoading(true);
+
     try {
-      const token = '1|qOI5HgPntmzrQGp3yFDk9J2CtjkkSxlF7uFCluz59ec9f5eb' 
       const response = await axios.get('http://127.0.0.1:8000/api/products', {
         headers: { Authorization: `Bearer ${token}` }
-      })
-      setProducts(response.data.data)
-      setLoading(false)
+      });
+      setProducts(response.data.data);
     } catch (error) {
-      console.error("Gagal mengambil data:", error)
-      setLoading(false)
+      console.error("Gagal mengambil data:", error);
+      // Jika token expired (401), otomatis logout
+      if (error.response && error.response.status === 401) {
+        handleLogout();
+      }
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Jalankan fetchProducts setiap kali state 'token' berubah
+  useEffect(() => {
+    if (token) {
+      fetchProducts();
+    }
+  }, [token]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setProducts([]);
+  };
+
+  // LOGIKA NAVIGASI: Jika tidak ada token, tampilkan halaman Login
+  if (!token) {
+    return <Login onLoginSuccess={(newToken) => setToken(newToken)} />;
   }
 
-  useEffect(() => {
-    fetchProducts()
-  }, [])
-
+  // JIKA ADA TOKEN, TAMPILKAN DASHBOARD
   return (
     <div className="container">
       <div className="header">
         <h1>🛠️ Inventori Bengkel</h1>
-        <button onClick={fetchProducts} style={{ cursor: 'pointer', padding: '10px 15px', borderRadius: '8px', border: '1px solid #ddd' }}>
-          🔄 Refresh Data
-        </button>
+        <div>
+          <button onClick={fetchProducts} disabled={loading} style={{ background: '#7674ffff', color: 'white', border: 'none', marginRight: '10px', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer' }}>
+            {loading ? '...' : '🔄 Refresh'}
+          </button>
+          <button onClick={handleLogout} style={{ background: '#ef4444', color: 'white', border: 'none', padding: '8px 15px', borderRadius: '8px', cursor: 'pointer' }}>
+            🚪 Keluar
+          </button>
+        </div>
       </div>
 
       <div className="card">
-        {loading ? (
+        {loading && products.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center' }}>Memuat data stok...</div>
         ) : (
           <table>
@@ -47,27 +77,35 @@ function App() {
               </tr>
             </thead>
             <tbody>
-              {products.map((product) => (
-                <tr key={product.id}>
-                  <td><strong>{product.name}</strong></td>
-                  <td><code>{product.sku}</code></td>
-                  <td>{product.stock} unit</td>
-                  <td>Rp {product.harga_jual.toLocaleString()}</td>
-                  <td>
-                    {product.stock <= 5 ? (
-                      <span className="badge badge-danger">Stok Rendah</span>
-                    ) : (
-                      <span className="badge badge-success">Tersedia</span>
-                    )}
+              {products.length > 0 ? (
+                products.map((product) => (
+                  <tr key={product.id}>
+                    <td><strong>{product.name}</strong></td>
+                    <td><code>{product.sku}</code></td>
+                    <td>{product.stock} unit</td>
+                    <td>Rp {product.harga_jual.toLocaleString()}</td>
+                    <td>
+                      {product.stock <= 5 ? (
+                        <span className="badge badge-danger">Stok Rendah</span>
+                      ) : (
+                        <span className="badge badge-success">Tersedia</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>
+                    Data produk kosong atau belum dimuat.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
